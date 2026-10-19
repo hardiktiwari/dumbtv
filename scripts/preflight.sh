@@ -38,7 +38,7 @@ note "remove $(list_of "$DATA/fireos/user-apps.txt" | wc -l | tr -d ' ') third-p
 note "deny background work + data to $(list_of "$DATA/fireos/protected.txt" | wc -l | tr -d ' ') protected packages"
 note "apply $(list_of "$DATA/fireos/settings.txt" | wc -l | tr -d ' ') privacy settings"
 note "install a DNS filter that blocks Amazon telemetry, Alexa and the OTA servers"
-note "replace the home screen with dumbtv home (this repo's own launcher, no permissions)"
+note "replace the home screen with dumbtv home (this repo's own launcher, no ads)"
 note "reboot twice (about 5 minutes)"
 
 step "not touched, ever"

@@ -37,12 +37,20 @@ public final class Guard extends AccessibilityService {
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable uncover = this::uncover;
+    /** A second HOME press inside the throttle window. Fired once the window ends. */
+    private final Runnable again = () -> {
+        if (paused) return;
+        lastLaunch = SystemClock.uptimeMillis();
+        cover();
+        home(Guard.this);
+    };
     private View cover;
     private long lastLaunch;
 
     /** Lets Amazon's home stay on screen until the user leaves it. */
     static void pause() {
         paused = true;
+        if (running != null) running.handler.removeCallbacks(running.again);
     }
 
     static void home(Context c) {
@@ -54,6 +62,7 @@ public final class Guard extends AccessibilityService {
     static void arrived(Context c) {
         AlarmManager alarms = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
         alarms.cancel(launch(c));
+        if (running != null) running.handler.removeCallbacks(running.again);
     }
 
     /** Called once our home window is on screen. */
@@ -100,6 +109,7 @@ public final class Guard extends AccessibilityService {
     @Override
     public void onDestroy() {
         handler.removeCallbacks(uncover);
+        handler.removeCallbacks(again);
         if (cover != null) ((WindowManager) getSystemService(WINDOW_SERVICE)).removeView(cover);
         if (running == this) running = null;
         super.onDestroy();
@@ -117,8 +127,16 @@ public final class Guard extends AccessibilityService {
             return;
         }
         if (paused || cls == null || !AMAZON_HOME.contentEquals(cls)) return;
+        // Amazon's home emits a burst of window events for one press. Launching on
+        // every event loops. A later press inside that same second is a new request:
+        // remember it and take over again as soon as the burst window ends.
         long now = SystemClock.uptimeMillis();
-        if (now - lastLaunch < REPEAT_MS) return;
+        long since = now - lastLaunch;
+        if (since < REPEAT_MS) {
+            handler.removeCallbacks(again);
+            handler.postDelayed(again, REPEAT_MS - since);
+            return;
+        }
         lastLaunch = now;
         cover();
         home(this);

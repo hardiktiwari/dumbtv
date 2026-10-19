@@ -38,8 +38,9 @@ Ask these, in plain language, and wait for answers:
 2. "Do you watch Prime Video?" — it stays installed either way, but if they say
    yes the video CDN is kept out of the blocklist (otherwise playback breaks).
 3. "Do you want Amazon's home screen replaced with dumbtv home, or kept?" —
-   dumbtv home is this repo's own launcher (`launcher/`): apps and HDMI inputs
-   only, open source, zero permissions. Replacing removes the promo tiles;
+   dumbtv home is this repo's own launcher (`launcher/`): apps, HDMI inputs,
+   and a tops row. Open source. Its only permission is internet, for that row.
+   Replacing removes the promo tiles;
    keeping Amazon's is less intrusive. Do not install Projectivy or another
    closed-source launcher instead.
 4. "Do you want the on-TV DNS filter?" — that is what actually stops telemetry

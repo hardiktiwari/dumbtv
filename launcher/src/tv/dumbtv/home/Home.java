@@ -37,8 +37,10 @@ import android.widget.Toast;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -48,6 +50,8 @@ public final class Home extends Activity {
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newSingleThreadExecutor();
+    private final ExecutorService net = Executors.newSingleThreadExecutor();
+    private final Map<String, Feeds.Shelf> shelves = new LinkedHashMap<>();
     private final List<TextView> chips = new ArrayList<>();
     private Config cfg;
     private TvInputManager tv;
@@ -56,8 +60,14 @@ public final class Home extends Activity {
     private FrameLayout root;
     private ImageView wall;
     private View shade;
-    private TextView clock, date;
+    private TextView clock, date, tvName;
     private Row apps, inputs;
+    private LinearLayout feedHead, feedStrip;
+    private HorizontalScrollView feedScroll;
+    private TextView feedTitle, feedSource;
+    private String feedFor;
+    private int posterGen;
+    private boolean feedsBusy, shelvesLoading;
     private Tile moving;
     private String wallKey;
 
@@ -151,6 +161,7 @@ public final class Home extends Activity {
         if (tv != null) tv.registerCallback(inputWatch, ui);
         loadApps(null);
         loadInputs();
+        ensureFeeds();
     }
 
     @Override
@@ -160,11 +171,13 @@ public final class Home extends Activity {
         Guard.arrived(this);
         cfg.refresh();
         if (cfg.version() != applied) apply();
+        showName();
         IntentFilter f = new IntentFilter(Intent.ACTION_TIME_TICK);
         f.addAction(Intent.ACTION_TIME_CHANGED);
         f.addAction(Intent.ACTION_TIMEZONE_CHANGED);
         registerReceiver(time, f);
         tick();
+        ensureFeeds();
     }
 
     @Override
@@ -185,6 +198,7 @@ public final class Home extends Activity {
         unregisterReceiver(packages);
         if (tv != null) tv.unregisterCallback(inputWatch);
         io.shutdownNow();
+        net.shutdownNow();
         super.onDestroy();
     }
 
@@ -289,16 +303,50 @@ public final class Home extends Activity {
         clock = Ui.text(this, 52, Ui.TEXT, Ui.LIGHT);
         date = Ui.text(this, 15, Ui.MUTED, Ui.MEDIUM);
         date.setPadding(dp(2), dp(8), 0, 0);
+        tvName = Ui.text(this, 15, Ui.MUTED, Ui.MEDIUM);
+        tvName.setPadding(dp(2), dp(4), 0, 0);
+        tvName.setSingleLine(true);
         when.addView(clock);
         when.addView(date);
+        when.addView(tvName);
         head.addView(when, new LinearLayout.LayoutParams(0, WRAP, 1f));
         head.addView(chip("Options", v -> startActivity(new Intent(this, Options.class))));
         head.addView(chip("Settings", v -> openSettings()));
         column.addView(head, new LinearLayout.LayoutParams(MATCH, WRAP));
 
         apps = new Row(Catalog.APPS, "Apps", column);
+        feed(column);
         inputs = new Row(Catalog.INPUTS, "Inputs", column);
         return root;
+    }
+
+    /** The tops row sits under the apps. It changes with the focused app. */
+    private void feed(LinearLayout column) {
+        int edge = dp(56), bleed = dp(14);
+        feedHead = new LinearLayout(this);
+        feedHead.setGravity(Gravity.CENTER_VERTICAL);
+        feedHead.setPadding(edge, dp(8), edge, dp(2));
+        feedTitle = Ui.text(this, 12, Ui.FAINT, Ui.MEDIUM);
+        feedTitle.setLetterSpacing(0.14f);
+        feedSource = Ui.text(this, 11, Ui.FAINT, Ui.MEDIUM);
+        feedSource.setPadding(dp(12), 0, 0, 0);
+        feedHead.addView(feedTitle, new LinearLayout.LayoutParams(0, WRAP, 1f));
+        feedHead.addView(feedSource);
+        feedStrip = new LinearLayout(this);
+        feedStrip.setClipChildren(false);
+        feedStrip.setClipToPadding(false);
+        feedStrip.setPadding(bleed, dp(8), bleed, dp(8));
+        feedScroll = new HorizontalScrollView(this);
+        feedScroll.setFocusable(false);
+        feedScroll.setHorizontalScrollBarEnabled(false);
+        feedScroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        feedScroll.setClipChildren(false);
+        feedScroll.setClipToPadding(false);
+        feedScroll.setPadding(edge - bleed, 0, edge - bleed, 0);
+        feedScroll.addView(feedStrip, new FrameLayout.LayoutParams(WRAP, WRAP));
+        column.addView(feedHead, new LinearLayout.LayoutParams(MATCH, WRAP));
+        column.addView(feedScroll, new LinearLayout.LayoutParams(MATCH, WRAP));
+        hideFeed();
     }
 
     /** The child of {@code strip} horizontally closest to {@code from}, or null when empty. */
@@ -344,8 +392,22 @@ public final class Home extends Activity {
         for (TextView c : chips) Ui.focusStyle(c, accent, 0x14FFFFFF, dp(18));
         render(apps);
         render(inputs);
+        View focused = getCurrentFocus();
+        if (focused instanceof Tile && Catalog.APPS.equals(((Tile) focused).kind)) {
+            showFeed(((Tile) focused).item.id, true);
+        }
         background();
         tick();
+        showName();
+    }
+
+    /** The name set in Fire TV settings, shown under the date. */
+    private void showName() {
+        String title = Settings.Global.getString(getContentResolver(), Settings.Global.DEVICE_NAME);
+        if (title == null) title = "";
+        title = title.trim();
+        tvName.setText(title);
+        tvName.setVisibility(title.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
     /** Rebuilds the app list, keeping loaded art for every package except {@code changed}. */
@@ -392,6 +454,11 @@ public final class Home extends Activity {
         for (Item it : shown) {
             Tile t = new Tile(this, it, row.kind, Catalog.label(cfg, it), w, h, labels, accent);
             t.setOnClickListener(v -> open((Tile) v));
+            if (Catalog.APPS.equals(row.kind)) {
+                t.setOnFocusChangeListener((v, has) -> {
+                    if (has) showFeed(((Tile) v).item.id, false);
+                });
+            }
             t.setOnLongClickListener(v -> {
                 menu((Tile) v);
                 return true;
@@ -595,6 +662,130 @@ public final class Home extends Activity {
         for (int i = 0; i < strip.getChildCount(); i++) ids.add(((Tile) strip.getChildAt(i)).item.id);
         Catalog.saveOrder(cfg, t.kind, ids);
         applied = cfg.version();
+    }
+
+    private void showFeed(String pkg, boolean force) {
+        if (!Feeds.supports(pkg)) {
+            hideFeed();
+            return;
+        }
+        View focused = getCurrentFocus();
+        if (force && feedStrip.indexOfChild(focused) >= 0 && pkg.equals(feedFor)) return;
+        if (!force && pkg.equals(feedFor) && feedStrip.getChildCount() > 0) return;
+        Feeds.Shelf shelf = shelves.get(pkg);
+        boolean waiting = shelvesLoading && (shelf == null || shelf.titles.isEmpty());
+        if ((shelf == null || shelf.titles.isEmpty()) && !waiting) {
+            hideFeed();
+            return;
+        }
+        feedFor = pkg;
+        feedTitle.setText(Feeds.heading(pkg).toUpperCase(Locale.ROOT));
+        String source = Feeds.source(pkg);
+        feedSource.setText(source);
+        feedSource.setVisibility(source.isEmpty() ? View.GONE : View.VISIBLE);
+        feedHead.setVisibility(View.VISIBLE);
+        feedScroll.setVisibility(View.VISIBLE);
+        int gen = ++posterGen;
+        feedStrip.removeAllViews();
+        if (shelf == null || shelf.titles.isEmpty()) {
+            TextView loading = Ui.text(this, 14, Ui.MUTED, Ui.MEDIUM);
+            loading.setText("Loading");
+            loading.setPadding(dp(14), dp(16), dp(14), dp(16));
+            feedStrip.addView(loading);
+            return;
+        }
+        int w = dp(168), h = dp(94), accent = cfg.accent();
+        List<Poster> cards = new ArrayList<>();
+        List<String> urls = new ArrayList<>();
+        for (Feeds.Title t : shelf.titles) {
+            Poster card = new Poster(this, t.rank, t.name, w, h, accent);
+            String open = t.open;
+            card.setOnClickListener(v -> openLink(open, pkg));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(WRAP, WRAP);
+            lp.rightMargin = dp(18);
+            feedStrip.addView(card, lp);
+            cards.add(card);
+            urls.add(t.poster);
+        }
+        net.execute(() -> {
+            for (int i = 0; i < cards.size(); i++) {
+                if (gen != posterGen) return;
+                Bitmap b = Feeds.image(urls.get(i), w, h);
+                if (gen != posterGen) {
+                    if (b != null) b.recycle();
+                    return;
+                }
+                Bitmap shown = b;
+                Poster card = cards.get(i);
+                ui.post(() -> {
+                    if (gen == posterGen && card.getParent() != null) card.setArt(shown);
+                    else if (shown != null) shown.recycle();
+                });
+            }
+        });
+    }
+
+    private void hideFeed() {
+        feedFor = null;
+        posterGen++;
+        if (feedHead == null) return;
+        feedHead.setVisibility(View.GONE);
+        feedScroll.setVisibility(View.GONE);
+        feedStrip.removeAllViews();
+    }
+
+    private void ensureFeeds() {
+        if (feedsBusy) return;
+        feedsBusy = true;
+        shelvesLoading = true;
+        net.execute(() -> {
+            try {
+                Feeds.Saved saved = Feeds.load(cfg.dir);
+                boolean stale = saved.stale();
+                ui.post(() -> {
+                    shelvesLoading = stale;
+                    applyShelves(saved.shelves);
+                });
+                if (stale || saved.incomplete()) {
+                    Feeds.Saved next = Feeds.refresh(cfg.dir, saved);
+                    ui.post(() -> {
+                        shelvesLoading = false;
+                        applyShelves(next.shelves);
+                    });
+                }
+            } finally {
+                ui.post(() -> feedsBusy = false);
+            }
+        });
+    }
+
+    private void applyShelves(Map<String, Feeds.Shelf> next) {
+        if (isDestroyed()) return;
+        shelves.clear();
+        shelves.putAll(next);
+        View f = getCurrentFocus();
+        String pkg = f instanceof Tile && Catalog.APPS.equals(((Tile) f).kind)
+                ? ((Tile) f).item.id : feedFor;
+        if (pkg != null) showFeed(pkg, true);
+    }
+
+    /** Opens the title in that app. If the app has no link for it, opens the app. */
+    private void openLink(String uri, String pkg) {
+        Intent view = new Intent(Intent.ACTION_VIEW, Uri.parse(uri)).setPackage(pkg);
+        view.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+        try {
+            startActivity(view);
+            return;
+        } catch (ActivityNotFoundException | SecurityException ignored) {
+            // this app does not accept a link for the title
+        }
+        Intent app = getPackageManager().getLeanbackLaunchIntentForPackage(pkg);
+        if (app == null) app = getPackageManager().getLaunchIntentForPackage(pkg);
+        if (app == null) {
+            Toast.makeText(this, "Could not open that", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        launch(app, null);
     }
 
     private int dp(float v) {

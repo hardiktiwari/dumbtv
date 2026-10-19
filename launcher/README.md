@@ -4,10 +4,10 @@ A home screen for Fire TV that does one job: show your apps and your HDMI inputs
 
 - **41 KB APK.** Plain Java and Android views: no AndroidX, Kotlin, Compose, Play
   Services or other libraries.
-- **No permissions at all.** It has no `INTERNET` permission, so Android blocks it
-  from opening any network connection. Check it yourself:
-  `aapt2 dump permissions build/dumbtv-home.apk`.
-- **No ads, no "recommended" rows, no account, no analytics, no update checks.**
+- **One permission: `INTERNET`.** The tops row under the apps reads public charts
+  (Netflix, YouTube, Prime Video, Tubi, Pluto). Nothing else uses the network.
+  Check it: `aapt2 dump permissions build/dumbtv-home.apk`.
+- **No ads, no account, no analytics, no update checks.**
 
 ## Install (no Java, no SDK)
 
@@ -72,6 +72,7 @@ update one with the other: `install.sh` says so and tells you to
 | Hold OK, or ☰ Menu | Move, Rename, Hide, App info |
 | Move mode | ◀ ▶ moves the tile, any other key drops it |
 | Up from the top row | Options and Settings |
+| Down from an app | that app's top titles, when it has a public list |
 | Back on the home screen | jump to the first tile |
 | Hold HOME | Fire OS quick menu (Amazon's, unchanged) |
 

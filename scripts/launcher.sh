@@ -17,7 +17,7 @@ fi
 PKG=tv.dumbtv.home
 
 step "plan"
-note "install dumbtv home: open source, 41 KB, no permissions (no internet, no ad ID)"
+note "install dumbtv home: open source, internet only for the tops row (no ad ID)"
 note "the prebuilt APK comes from this repo's GitHub release and is checksum-verified"
 note "take over HOME: accessibility service + settings global alarm_manager_constants min_futurity=0"
 note "Amazon's launcher stays installed: hold HOME for Fire OS's menu, or Options > Open Amazon's home screen"

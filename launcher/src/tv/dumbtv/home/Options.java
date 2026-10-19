@@ -62,7 +62,7 @@ public final class Options extends Activity {
         about.setPadding(dp(16), dp(28), 0, 0);
         about.setText("Settings file: " + cfg.dir + "/" + Config.FILE
                 + "\nWallpaper: put wallpaper.jpg in that folder, then pick Background › Image file"
-                + "\nNo internet permission. No tracking, no ads, no accounts.");
+                + "\nThe tops row under your apps uses the internet for public charts. No account, no ads.");
         list.addView(about);
 
         setContentView(scroll);

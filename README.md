@@ -79,16 +79,16 @@ work).
 | Protected packages | The handful Amazon refuses to disable get their background execution and background data removed instead. |
 | Settings | Ad tracking limited, interest-based ads off, app/device usage reporting off, wake word and voice off, promo autoplay off. |
 | DNS | personalDNSfilter runs on the TV: Amazon telemetry, Alexa endpoints and the OTA servers answer `127.0.0.1`. YouTube and the app store still resolve. |
-| Launcher | [dumbtv home](launcher/README.md), this repo's own launcher, replaces Amazon's home screen — no promo tiles, no sponsored rows. 41 KB, open source, zero permissions. |
+| Launcher | [dumbtv home](launcher/README.md), this repo's own launcher, replaces Amazon's home screen — no promo tiles, no sponsored rows. Open source. Internet is used only for the tops row. |
 
 Every step is reversible with `scripts/restore.sh`.
 
 ## The launcher
 
 `launcher/` is a home screen written for this repo: your apps, your HDMI inputs,
-a clock, and nothing else. Plain Java with no libraries, and **no permissions
-at all** — it has no internet permission, so it cannot phone home even if it
-wanted to. HOME lands on it in about 0.2 s, with no flash of Amazon's home.
+a clock, and a tops row for the focused app. Plain Java with no libraries. Its
+only permission is internet, and only the tops row uses it. HOME lands on it in
+about 0.2 s, with no flash of Amazon's home.
 
 It replaced Projectivy, which this repo used to install: Projectivy is closed
 source and asks for the advertising ID, ad attribution, install referrer,

@@ -54,7 +54,7 @@ else
   PRIME=0; note "prime: blocked (playback will not work)"
 fi
 
-LAUNCHER=$(yn "Replace Amazon's home screen with dumbtv home (open source, no ads, no permissions)?" 1)
+LAUNCHER=$(yn "Replace Amazon's home screen with dumbtv home (open source, no ads)?" 1)
 DNSFILTER=$(yn "Run the on-TV DNS filter (blocks Amazon telemetry and updates)?" 1)
 
 if [[ $ASSUME_YES == 0 && -z $KEEP_ARG ]]; then

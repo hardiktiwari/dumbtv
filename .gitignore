@@ -5,3 +5,5 @@ report/
 dumbtv.conf
 launcher/build/
 launcher/*.keystore
+screensaver/*.keystore
+screensaver/build/
